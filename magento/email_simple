@@ -1,0 +1,26 @@
+$content ='<table  border=\'1\'>
+  	<tr>
+  		<td>Order No.</td>
+  		<td>Product Name</td>
+  		<td>Sku</td>
+  		<td>Order Confirmed Date</td>
+  		<td>Vendor Name</td>
+  		<td>Days after Deadline</td>
+  	</tr>
+  	';
+  	foreach ($response['data'] as $row) {
+  		$diff = time()-strtotime($row[4]);
+  	 $days = floor($diff/(60*60*24));
+  		$content.=	'<tr>'.'<td>'.$row[0].'</td>'.'<td>'.$row[5].'</td>'.'<td>'.$row[6].'</td>'.'<td>'.$row[2].'</td>'.'<td>'.$row[7].'</td>'.'<td>'.$days.' days </td>'.'</tr>';
+  	}
+  	$content .='</table>';
+  	echo $content;
+		$mail = Mage::getModel('core/email');
+		$mail->setToName("indiarush");
+		$mail->setToEmail("artisharma@indiarush.com");
+		$mail->setBody($content);
+		$mail->setSubject("Out OF tat Status");
+		$mail->setFromEmail("admin@indiarush.com");
+		$mail->setFromName("admin");
+		$mail->setType('html');// YOu can use Html or text as Mail format
+		$mail->send();
