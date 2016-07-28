@@ -1,0 +1,75 @@
+ public function urlToSkuDownAction()
+    {
+      $ids = $this->getRequest()->getParam('linksku');
+      $links = preg_split("/[\r\n]+/", $ids, -1, PREG_SPLIT_NO_EMPTY);
+      $filename = "LinktoSku-".date("YmdHis").".csv";
+      $io = new Varien_Io_File();
+      $path = Mage::getBaseDir('var').DS.'export'.DS;
+      $name = md5(microtime());
+      $file = $path.$name.'.csv';
+      $io->setAllowCreateFolders(true);
+      $io->open(array('path'=>$path));
+      $io->streamOpen($file,'w+');
+      $io->streamLock(true);  
+      $io->streamWriteCsv(array("link","sku","product id","price","special_price","Qty","Vendor_name","Product_name","associated product"));
+
+      foreach ($links as $link) {
+        $url  =explode("indiarush.com/",$link);
+        $url[1]= str_replace("\"","",$url[1]);
+        $url[1]= str_replace("/","",$url[1]);
+        $oRewrite = Mage::getModel('core/url_rewrite')
+                    ->setStoreId(1)
+                    ->loadByRequestPath($url[1]);
+        if(!$oRewrite->getUrlRewriteId()){
+        $oRewrite = Mage::getModel('core/url_rewrite')
+                    ->setStoreId(1)
+                    ->loadByRequestPath($url[1]."/");          
+        }
+        if(!$oRewrite->getUrlRewriteId()){
+        $oRewrite = Mage::getModel('core/url_rewrite')
+                    ->setStoreId(1)
+                    ->loadByRequestPath("/".$url[1]);          
+        }
+        if(!$oRewrite->getUrlRewriteId()){
+        $oRewrite = Mage::getModel('core/url_rewrite')
+                    ->setStoreId(1)
+                    ->loadByRequestPath("/".$url[1]."/");          
+        }
+        if(!$oRewrite->getUrlRewriteId()){
+        continue;          
+        }
+        $productId = $oRewrite->getProductId();
+        $product = Mage::getModel("catalog/product")->load($productId);
+        $stock = Mage::getModel('cataloginventory/stock_item')->loadByProduct($productId);
+        $productdetails = Mage::getModel('iweb_dropshipper/product')->getDropshipperDetailsForProductId($productId);
+        $vendorname = $productdetails['company_name'];
+        $qty = (int)$stock->getQty();
+        $productname = $product->getName();
+        $sku = "";
+        $productType = $product->getTypeId();
+        if($productType == "configurable"){
+          $childProducts = Mage::getModel('catalog/product_type_configurable')->getUsedProducts(null,$product);
+          if(count($childProducts) > 0){
+            foreach($childProducts as $child) {
+                $simpleProduct = Mage::getModel("catalog/product")->load($child->getId());
+                $sku  .= $simpleProduct->getSku().";";
+            }
+          }
+        }
+        
+        $parentIds = Mage::getResourceSingleton('catalog/product_type_configurable')->getParentIdsByChild($productId);
+        if (count($parentIds) > 0 && $product->isConfigurable()){
+          $simpleProduct = Mage::getModel("catalog/product")->load($parentIds[0]);
+          $childProducts = Mage::getModel('catalog/product_type_configurable')->getUsedProducts(null,$simpleProduct);
+          if(count($childProducts) > 0){
+            foreach($childProducts as $child) {
+                $simpleProduct2 = Mage::getModel("catalog/product")->load($child->getId());
+                $sku  .= $simpleProduct->getSku().";";
+            }
+          }
+        }
+$io->streamWriteCsv(array($link,$product->getSku(),$productId,$product->getPrice(),$product->getSpecialPrice(),$qty,$vendorname,$productname,$sku));
+      }
+      $content = array('type'=>'filename', 'value'=> $file,'rm'=>false);
+      $this->_prepareDownloadResponse($filename, file_get_contents($file));
+    }
