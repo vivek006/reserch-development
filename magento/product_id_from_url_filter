@@ -1,0 +1,70 @@
+public function getProductDetailsFromUrl($url,$type,$id)
+   {
+
+     $query_str = parse_url($url);
+   
+     $requestPath = trim($query_str['path'], '/');
+     $result = Mage::getModel("core/url_rewrite")->getAdditionalQueryString($requestPath,$query_str);
+     
+     $queryString = $result['query'].$query_str['query'];
+     
+     $catId = $this->getCategoryId($result['request_path']);
+     
+     /* To Get Category ID */
+     $resource = Mage::getSingleton('core/resource');
+     $writeConnection = $resource->getConnection('core_read');
+     $sql1= "SELECT `url_path`,`entity_id` FROM `catalog_category_flat_store_1` where is_active =1 ;";
+     $res= $writeConnection->query($sql1);
+     $cats = $res->fetchAll();
+     foreach($cats as $cat){
+       $categoryUrl = trim($cat['url_path'],'/');
+       if ($categoryUrl == $result['request_path']){
+         $finalCategoryId = $cat['entity_id'];
+       }
+     }
+     $category = Mage::getModel('catalog/category')->load($finalCategoryId);
+     if($category->getId()) {
+       $status = Mage_Catalog_Model_Product_Status::STATUS_ENABLED;
+       $products = Mage::getModel('catalog/product')->getCollection();
+       $products
+      ->addAttributeToFilter('status', $status)
+      ->addAttributeToFilter('visibility', '4')
+       ->addAttributeToSelect('e.entity_id');
+       $products
+         ->addCategoryFilter($category)
+         ->joinField(
+         'stock_status',
+         'cataloginventory/stock_status',
+         'stock_status',
+         'product_id=entity_id', array(
+         'stock_status' => Mage_CatalogInventory_Model_Stock_Status::STATUS_IN_STOCK,
+         'website_id' =>'1'
+       ));
+       
+       $queryStringArray = explode('&',$queryString);
+       foreach ($queryStringArray as $value) {
+         $keyPair = explode("=",$value);
+         if(!in_array($keyPair[0],array("price","order","dir","cat","Array","new"))){
+           $value2 = explode("_",trim($keyPair[1]));
+           if($value2!=null) {
+              $products->addAttributeToFilter($keyPair[0], array('in'=>$value2));
+            }
+         } else if ($keyPair[0] == "new"){
+           $products->addAttributeToFilter("created_at",array("gteq"=>date("Y-m-d",strtotime("-30 days"))));
+         } else if ($keyPair[0] == "price"){
+           $priceKeyPair = explode('%2C',$keyPair[1]);
+           $products->addAttributeToFilter("special_price",array("gteq"=>$priceKeyPair[0]));
+           $products->addAttributeToFilter("special_price",array("lteq"=>$priceKeyPair[1]));           
+         }
+       }
+       if($type=='add'){
+        return $status=Mage::getModel('ircoupon/product')->insertProductDetails($products,$id);
+       }
+       if($type=='delete'){
+        return $status=Mage::getModel('ircoupon/product')->deleteProductDetails($products,$id);
+       }
+      
+     }
+     return false;
+  }
+  
