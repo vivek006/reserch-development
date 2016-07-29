@@ -8,7 +8,7 @@ public function getProductDetailsFromUrl($url,$type,$id)
      
      $queryString = $result['query'].$query_str['query'];
      
-     $catId = $this->getCategoryId($result['request_path']);
+     //$catId = $this->getCategoryId($result['request_path']);
      
      /* To Get Category ID */
      $resource = Mage::getSingleton('core/resource');
