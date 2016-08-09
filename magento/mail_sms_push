@@ -1,0 +1,225 @@
+public function sent()
+{
+$emailData['recipientEmail']=$customer->getEmail();
+			        $emailData['recipientName']=$firstName.' '.$lastName;
+			        $emailData['orderId']=$item_->getOrderIncrementId();
+			        $emailData['itemId']=$item->getItemId();
+			        $emailData['createdAt']=$item_->getCreatedAt();
+			        $emailData['creditAmount']='';
+			        $emailData['delayDays']=$daysExceeded;
+			        $emailData['productName']=substr($item->getName(),0, 10).'..';
+			        
+			        
+			        $emailData['productDetails'][] = array(
+			            'item_id' =>   $item->getItemId(),
+			            'price' => $item_->getPriceInclTax(),
+			            'created_date'=>$item_->getCreatedAt(),
+			            'quantity'=>(int)$item_->getQtyOrdered(), 
+			            'product_id'=>$item_->getProductId());
+			       // $tempId='96'; //live
+			        $tempId='83'; //live
+			        $result=$this->beginCommunication($tempId,$emailData);
+	}
+
+
+
+
+public function beginCommunication($templateId,$vars)
+    {
+    	
+    	
+    	$mailTemplate = Mage::getModel('core/email_template')->load($templateId);
+
+        $testingRecipientMail= $mailTemplate->getTestingRecipientMail();
+        $templateSenderName= $mailTemplate->getTemplateSenderName();
+        $templateType= $mailTemplate->getTemplateTypes();
+        $isSmsSent= $mailTemplate->getUseSmsTemplate();
+        $isPushNotifSent= $mailTemplate->getUsePushNotifTemplate();
+        $smsTestingRecipientMobileNumbers= $mailTemplate->getMobileNumbers();
+        
+        $pushNotifTemplateContent= $mailTemplate->getPushNotifTemplateContent();
+        $pushNotifTemplateTitle= $mailTemplate->getPushNotifTemplateTitle();
+        $pushNotifTemplateUrl= $mailTemplate->getPushNotifTemplateUrl();
+        $pushNotifTestMail= $mailTemplate->getPushNotifTestMail();
+
+        
+    	$recipientName=$vars['recipientName'];
+        $recipientEmail=$vars['recipientEmail'];
+
+        $mobileNumber=$vars['mobileNumber'];
+	    $orderId=$vars['orderId'];
+	    $useShippingAddress=$vars['useShippingAddress'];
+	    $creditsAmount=$vars['creditsAmount'];
+	    $productName=$vars['productName'];
+
+	    if($orderId !='')
+		{
+	     	$orderDetails = Mage::getModel('sales/order')->getCollection()->addFieldToFilter('increment_id',$orderId)->getFirstItem();
+
+		    $orderDetailsArray=$orderDetails->getData();
+
+		    $mobileNumber= $orderDetails->getShippingAddress()->getTelephone();
+		    $customerId= $orderDetailsArray['customer_id'];
+
+
+		}
+		else if($recipientEmail !='')
+		{
+
+		       $customerDetails = Mage::getModel('customer/customer')->getCollection()->addAttributeToFilter('email', array('like' => $recipientEmail))->getFirstItem();
+
+			   $customerDetailsArray=$customerDetails->getData();
+			   			   $customerAddress = array();
+
+			   foreach ($customerDetails->getAddresses() as $address)
+				{
+				   $customerAddress = $address->toArray();
+				}
+			
+			     $customerId= $customerDetailsArray['entity_id'];
+                 $mobileNumber= $customerAddress['telephone'];
+			 
+
+		}
+        
+		    if($recipientEmail !='' && $recipientName !='')
+		    {
+
+					    if($testingRecipientMail !='')
+						{
+					            $recipientEmail = $testingRecipientMail;
+
+					    }   
+		        		 $headerFooter=$this->getTemplateHeaderFooter($templateType);
+		        		 $headerHtml= $headerFooter[0];
+				         $footerHtml= $headerFooter[1];
+
+				         $vars['headerHtml']=$headerHtml;
+				         $vars['footerHtml']=$footerHtml;
+				         $senderName = "IndiaRush";
+				         $senderEmail = "care@indiarush.com";
+				         $sender = array('name' => $senderName,
+				                        'email' => $senderEmail);
+				         $storeId = Mage::app()->getStore()->getId();
+				         $translate = Mage::getSingleton('core/translate');
+
+				        Mage::getModel('core/email_template')->sendTransactional($templateId, $sender, $recipientEmail,$recipientName, $vars, $storeId);
+				         $translate->setTranslateInline(true); 
+		    }	
+
+    	    if($isSmsSent == 1)
+	        {   
+	        	if($smsTestingRecipientMobileNumbers != '')
+		        {
+		            $mobileNumber=$smsTestingRecipientMobileNumbers;
+		        }
+		        if($mobileNumber !='')
+		        {
+		      
+		        	Mage::getModel('irsms/irsms')->sendSMSByEmailTemplate($mobileNumber,$orderId, $templateId, $useShippingAddress,$creditsAmount,$productName);
+		        }
+	            
+	            
+	        }
+	    	if($isPushNotifSent == 1)
+	        {   
+		        		
+	        		
+		        	if($customerId !='')
+		        	{
+		        		$deviceCollection = Mage::getResourceModel('pushnotification/device_collection')->addFieldToFilter('customer_id',$customerId);
+
+		        		
+				        $registrationIds = array();
+				        foreach ($deviceCollection as $value) {
+				                    $registrationIds[] = $value->getRegistrationId();
+				                }
+
+		        	}
+	        		
+	        	
+
+	        	$registrationIdsCount=count($registrationIds);
+
+	        	if($testingRecipientMail != '')
+				{
+				            $testUserEmails=$testingRecipientMail;
+				}
+
+			    if($testUserEmails !='' || $registrationIdsCount !=0 )
+			    {
+			    	Mage::getModel('pushnotification/api')->sendAndroidNotification($pushNotifTemplateContent, $pushNotifTemplateTitle, $pushNotifTemplateUrl, $registrationIds,$imageURL,$testUserEmails,$orderId,$templateId,$useShippingAddress,$creditsAmount);
+			    }
+	           
+	    		
+	        }
+
+    }
+    
+    public function sendSMSByEmailTemplate($mobileNumber=0,$orderId=0, $templateId, $useShippingAddress = 0,$creditsAmount = 0,$productName=0){
+		
+		if($productName!=0)
+		{
+			$productName=str_replace("&","",substr($productName,0, 10).'..');
+		}
+		
+		if($mobileNumber !=0 && $orderId ==0)
+		{
+			
+			$orderData['mobileNumber'] = $mobileNumber;
+			$smsMessage = $this->getSmsMessageData($templateId,NULL);
+			
+		}
+        else if($mobileNumber !=0 && $orderId !=0)
+		{
+			
+			$orderData = $this->fetchOrderInformation($orderId, $useShippingAddress);
+			$orderData['mobileNumber'] = $mobileNumber;
+			$orderData['CREDITS_AMOUNT'] = $creditsAmount;
+			$orderData['PRODUCT_NAME'] = 
+		    $smsMessage = $this->getSmsMessageData($templateId,$orderData);
+		}
+		else if($mobileNumber ==0 && $orderId !=0)
+		{	
+			$orderData = $this->fetchOrderInformation($orderId, $useShippingAddress);
+			$orderData['CREDITS_AMOUNT'] = $creditsAmount;
+			$orderData['PRODUCT_NAME'] = $productName;
+		    $smsMessage = $this->getSmsMessageData($templateId,$orderData);
+		}		
+		$this->triggerSMS($orderData, $smsMessage,$templateId);
+	}
+	
+	public function getMessageData($templateId,$orderData){ 
+
+    	$templateSMSText = $this->templateText[$templateId];
+		foreach ($orderData as $label => $data){
+			$templateSMSText = str_replace('##'.$label.'##',$data,$templateSMSText);
+		}
+	
+		return $templateSMSText;
+	} 
+
+	public function getSmsMessageData($templateId,$orderData){ 
+		
+					
+		if($orderData)
+		{
+			$template = Mage::getModel('core/email_template')->load($templateId);
+	    	$SmsTemplateContent= $template->getSmsTemplateContent();
+	    	foreach ($orderData as $label => $data){
+			$SmsTemplateContent = str_replace('##'.$label.'##',$data,$SmsTemplateContent);
+			}
+		}
+		else{
+
+			$template = Mage::getModel('core/email_template')->load($templateId);
+	    	$SmsTemplateContent= $template->getSmsTemplateContent();
+	    	
+		}
+		return $SmsTemplateContent;
+	} 
+	
+	
+    
+    
+    
