@@ -1,0 +1,38 @@
+public function getEditImageZipAction()
+  {     
+    $collection=Mage::getModel('iweb_dropshipper/preview')->getCollection();
+    $collection->addFieldToFilter('status','edit_image');
+    $data=$collection->getData();
+
+    $destPath = Mage::getBaseDir('media').'/iroffer6/'; 
+        if(!file_exists($destPath)){
+            mkdir($destPath, 0777);
+        }
+
+    foreach ($data as  $value) {
+      $arrayData=explode('/',$value['image_1']);
+      $imageName=end($arrayData);
+      $dest=$destPath.$imageName;
+      if(copy($value['image_1'], $dest));
+    }
+
+    $dir = $destPath;
+    $archive = 'editimage'.date('d-M').'.zip';
+
+    $zip = new ZipArchive;
+    $zip->open($archive, ZipArchive::CREATE);
+
+    $files = scandir($dir);
+    unset($files[0], $files[1]);
+
+    foreach ($files as $file) {
+     $zip->addFile($dir.'/'.$file);
+    }
+
+    $zip->close();
+    header('Content-Type: application/zip');
+    header('Content-disposition: attachment; filename='.$archive);
+    header('Content-Length: '.filesize($archive));
+    readfile($archive);
+    unlink($archive);
+  }
